@@ -1,0 +1,486 @@
+<!doctype html><html lang="zh-CN" data-appearance-mode="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/js/appearance.js"></script><meta><title>Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决 - 虹墨空间站</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="虹墨空间站"><meta name="msapplication-TileImage" content="/favicon.ico"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="虹墨空间站"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="AI 生成 本文内容由 AI 生成，并已人工验证可信。 在 Ubuntu 上用微信，有个很别扭的毛病：点了窗口右上角的关闭按钮，微信就缩到顶栏托盘里去了，进程还在、消息照收。这时候你想把它叫回来，下意识去点左边 Dock 栏的微信图标——结果鼠标变成转圈，转了几秒，什么也没发生。窗口不回来，只有老老实实去点顶栏那个绿色托盘图标才行。 这个毛病我忍了很久，网上能搜到的答案基本都是「改习惯，点托盘」。"><meta property="og:type" content="article"><meta property="og:title" content="Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决"><meta property="og:url" content="https://www.imaegoo.com/2026/linux-wechat-dock-tray-restore/"><meta property="og:site_name" content="虹墨空间站"><meta property="og:description" content="AI 生成 本文内容由 AI 生成，并已人工验证可信。 在 Ubuntu 上用微信，有个很别扭的毛病：点了窗口右上角的关闭按钮，微信就缩到顶栏托盘里去了，进程还在、消息照收。这时候你想把它叫回来，下意识去点左边 Dock 栏的微信图标——结果鼠标变成转圈，转了几秒，什么也没发生。窗口不回来，只有老老实实去点顶栏那个绿色托盘图标才行。 这个毛病我忍了很久，网上能搜到的答案基本都是「改习惯，点托盘」。"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://www.imaegoo.com/images/og_image.png"><meta property="article:published_time" content="2026-11-27T06:20:00.000Z"><meta property="article:modified_time" content="2026-11-27T06:20:00.000Z"><meta property="article:author" content="iMaeGoo"><meta property="article:tag" content="tool"><meta property="article:tag" content="ubuntu"><meta property="twitter:card" content="summary"><meta property="twitter:image:src" content="https://www.imaegoo.com/images/og_image.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://www.imaegoo.com/2026/linux-wechat-dock-tray-restore/"},"headline":"Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决","image":["https://www.imaegoo.com/images/og_image.png"],"datePublished":"2026-11-27T06:20:00.000Z","dateModified":"2026-11-27T06:20:00.000Z","author":{"@type":"Person","name":"iMaeGoo"},"publisher":{"@type":"Organization","name":"虹墨空间站","logo":{"@type":"ImageObject","url":{"light":"/images/logo.png","dark":"/images/logo-dark.png"}}},"description":"AI 生成 本文内容由 AI 生成，并已人工验证可信。 在 Ubuntu 上用微信，有个很别扭的毛病：点了窗口右上角的关闭按钮，微信就缩到顶栏托盘里去了，进程还在、消息照收。这时候你想把它叫回来，下意识去点左边 Dock 栏的微信图标——结果鼠标变成转圈，转了几秒，什么也没发生。窗口不回来，只有老老实实去点顶栏那个绿色托盘图标才行。 这个毛病我忍了很久，网上能搜到的答案基本都是「改习惯，点托盘」。"}</script><link rel="canonical" href="https://www.imaegoo.com/2026/linux-wechat-dock-tray-restore/"><link rel="alternate" href="/atom.xml" title="虹墨空间站" type="application/atom+xml"><link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/css/font/fontawesome/css/all.min.css"><link rel="stylesheet" href="/css/github-calendar.css"><link data-pjax rel="stylesheet" href="/js/imaegoo/highlight.js/11.11.1/styles/vs.css"><script>window.IcarusAppearance.sync()</script><link data-variant rel="stylesheet" href="/css/font/font.css"><link data-variant rel="stylesheet" href="/css/default.css"><script src="https://vercount.one/js" defer="defer"></script><link rel="stylesheet" href="/js/imaegoo/lightgallery/3.0.0/css/lightgallery-bundle.min.css" data-pjax><link rel="stylesheet" href="/js/imaegoo/justified-gallery/4.0.2/dist/assets/justified-gallery.css" data-pjax><script src="https://www.googletagmanager.com/gtag/js?id=G-RCCCLYKRH5" async></script><script>function gtag(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],gtag("js",new Date),gtag("config","G-RCCCLYKRH5")</script><link rel="stylesheet" href="/js/imaegoo/cookieconsent/3.1.1/build/cookieconsent.min.css"><script>
+  (function () {
+      function switchTab() {
+          if (!location.hash) {
+            return;
+          }
+
+          let hash = location.hash.substring(1);
+          try {
+            // Non-ASCII IDs are percent-encoded in the URL
+            hash = decodeURIComponent(hash);
+          } catch (e) {}
+          const id = '#' + CSS.escape(hash);
+          const $tabMenu = document.querySelector(`.tabs a[href="${id}"]`);
+          if (!$tabMenu) {
+            return;
+          }
+
+          const $tabMenuContainer = $tabMenu.parentElement.parentElement;
+          Array.from($tabMenuContainer.children).forEach($menu => $menu.classList.remove('is-active'));
+          Array.from($tabMenuContainer.querySelectorAll('a'))
+              .map($menu => document.getElementById($menu.getAttribute("href").substring(1)))
+              .forEach($content => $content.classList.add('is-hidden'));
+
+          if ($tabMenu) {
+              $tabMenu.parentElement.classList.add('is-active');
+          }
+          const $activeTab = document.querySelector(id);
+          if ($activeTab) {
+              $activeTab.classList.remove('is-hidden');
+          }
+      }
+      // The script is in <head>, so wait for the tabs to switch to the tab in the URL
+      if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', switchTab);
+      } else {
+          switchTab();
+      }
+      window.addEventListener('hashchange', switchTab, false);
+  })();
+  </script><meta name="generator" content="Hexo 8.1.2"></head><body class="is-3-column"><script type="text/javascript" src="/js/imaegoo/night.js"></script><canvas id="universe"></canvas><div id="browser-notice" data-pjax></div><nav class="navbar navbar-main"><div class="container navbar-container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img class="logo-img" src="/images/logo.png" alt="虹墨空间站" height="28"><img class="logo-img-dark" src="/images/logo-dark.png" alt="虹墨空间站" height="28"></a></div><div class="navbar-menu"><button class="navbar-item navbar-toggle" type="button" title="菜单" aria-label="菜单" aria-expanded="false" aria-controls="navbar-main-menu"><i class="fas fa-bars" aria-hidden="true"></i></button><div class="navbar-start" id="navbar-main-menu"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives/">时间轴</a><a class="navbar-item" href="/categories/">分类</a><a class="navbar-item" href="/tags/">标签</a><a class="navbar-item" href="/messages/">留言板</a><a class="navbar-item" href="/friends/">友情链接</a><a class="navbar-item" href="/moments/">友链朋友圈</a><a class="navbar-item" href="/about/">关于</a></div><div class="navbar-end"><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i><span>  目录</span></a><a class="navbar-item night" id="night-nav" title="Night Mode" href="javascript:;"><i class="fas fa-moon" id="night-icon"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-6-widescreen"><div class="card"><article class="card-content article" role="article"><div class="article-meta is-size-7 is-uppercase level is-mobile"><div class="level-left"><span class="level-item"><time datetime="2026-11-27T06:20:00.000Z" title="2026-11-27 14:20:00">2026-11-27</time>发表</span><span class="level-item"><a class="link-muted" href="/categories/tech/">Tech</a><span> / </span><a class="link-muted" href="/categories/tech/linux/">Linux</a></span><span class="level-item">16 分钟读完 (大约2463个字)</span><span class="level-item leancloud_visitors" id="/2026/linux-wechat-dock-tray-restore/" data-flag-title="Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决"><i class="far fa-eye"></i>&nbsp;&nbsp;<span id="twikoo_visitors"><i class="fa fa-spinner fa-spin"></i></span>次访问</span></div></div><h1 class="title is-3 is-size-4-mobile">Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决</h1><div class="content"><article class="message is-info"><div class="message-header"><p>AI 生成</p></div><div class="message-body"><p>本文内容由 AI 生成，并已人工验证可信。</p></div></article><p>在 Ubuntu 上用微信，有个很别扭的毛病：点了窗口右上角的关闭按钮，微信就缩到顶栏托盘里去了，进程还在、消息照收。这时候你想把它叫回来，下意识去点左边 Dock 栏的微信图标——结果鼠标变成转圈，转了几秒，什么也没发生。窗口不回来，只有老老实实去点顶栏那个绿色托盘图标才行。</p><p>这个毛病我忍了很久，网上能搜到的答案基本都是「改习惯，点托盘」。索性把它彻底扒了一遍，最后用一个包装脚本解决了，现在点 Dock 图标和点托盘效果完全一样。</p><span id="more"></span><h2 id="先说结论"><a href="#先说结论" class="headerlink" title="先说结论"></a>先说结论</h2><ul><li>微信关窗口只是 <code>hide()</code>，进程和窗口对象都还在，托盘图标也还挂在 D-Bus 上；</li><li>点 Dock 图标时，GNOME 会<strong>重新执行一遍 desktop 文件里的 <code>Exec</code></strong>，也就是再跑一次 <code>/usr/bin/wechat</code>。微信有单实例锁，第二个进程 0.04 秒后以退出码 255 静默退出，什么也不做——于是既没有窗口，也没有报错，只剩下一个转圈的鼠标；</li><li>真正能把主窗口叫回来的，只有微信自己注册的托盘项（<code>org.kde.StatusNotifierItem</code>）。它的 <code>Activate</code> 方法和托盘菜单里的「显示」项才是「恢复主窗口」的正确入口。</li></ul><p>所以解法就是：<strong>别让 Dock 图标再去跑 <code>/usr/bin/wechat</code>，让它先走托盘那条路</strong>。</p><p><img src="/gallery/2026/linux-wechat-dock-tray-restore/1795760678607.webp"></p><h2 id="环境"><a href="#环境" class="headerlink" title="环境"></a>环境</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Ubuntu 26.04.1 LTS</span><br><span class="line">GNOME Shell 50.1（Ubuntu 模式，Wayland 会话）</span><br><span class="line">wechat 4.1.13.29（腾讯官方 deb，装在 /opt/wechat）</span><br></pre></td></tr></table></figure><h2 id="排查过程"><a href="#排查过程" class="headerlink" title="排查过程"></a>排查过程</h2><h3 id="一、微信根本没退出"><a href="#一、微信根本没退出" class="headerlink" title="一、微信根本没退出"></a>一、微信根本没退出</h3><p>关掉窗口以后看进程：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ pgrep -x wechat</span><br><span class="line">5431</span><br></pre></td></tr></table></figure><p>主进程、crashpad、小程序运行时、各种 renderer 一个不少。<code>/usr/bin/wechat</code> 其实是 <code>/opt/wechat/wechat</code> 的软链接，整个东西是一套基于 Qt 的自绘界面，主窗口是 Wayland 原生 surface（<code>libwayland-client.so</code> 在它的内存映射里，X11 的窗口树里找不到它）。</p><p>这就解释了第一件事：<strong>它不是崩溃，也不是最小化</strong>。最小化的窗口在 GNOME 里点 Dock 图标是能还原的，因为它还挂在窗口管理器上；而隐藏起来的窗口对 shell 来说等于不存在了。</p><h3 id="二、点-Dock-图标，其实是在重复启动微信"><a href="#二、点-Dock-图标，其实是在重复启动微信" class="headerlink" title="二、点 Dock 图标，其实是在重复启动微信"></a>二、点 Dock 图标，其实是在重复启动微信</h3><p>这一步是关键。看用户会话日志（<code>journalctl</code>），每次点 Dock 图标都会留下一条这样的记录：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Started app-gnome-wechat-7480.scope - Application launched by gnome-shell.</span><br><span class="line">Started app-gnome-wechat-9505.scope - Application launched by gnome-shell.</span><br><span class="line">Started app-gnome-wechat-10047.scope - Application launched by gnome-shell.</span><br><span class="line">Started app-gnome-wechat-13179.scope - Application launched by gnome-shell.</span><br></pre></td></tr></table></figure><p>每次都是<strong>新的 PID</strong>，而这些 PID 一个都没活下来。手动验证一下：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="keyword">time</span> /usr/bin/wechat</span><br><span class="line">Command exited with non-zero status 255</span><br><span class="line">耗时 0.04 秒</span><br></pre></td></tr></table></figure><p>第二个实例检测到 <code>~/.xwechat/lock/</code> 里的单实例锁，直接退出，退出码 255，stdout&#x2F;stderr 一个字都没有。</p><p>GNOME 这边呢？它只知道「我执行了 Exec，进程退出了，但没有窗口出现」。配合 desktop 文件里的 <code>StartupNotify=true</code>，它还在等一个永远不会到来的启动完成信号——你看到的那个转圈的鼠标，大概率就是在等这个。</p><blockquote><p>顺手记一笔：既然第二个实例是静默退出的，「再点一次 Dock 图标」这种土办法在 Linux 上没有任何用，只有第一次点的时候可能碰巧有效。</p></blockquote><h3 id="三、托盘那条路为什么就行"><a href="#三、托盘那条路为什么就行" class="headerlink" title="三、托盘那条路为什么就行"></a>三、托盘那条路为什么就行</h3><p>微信在会话总线上注册了一个托盘项：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ busctl --user list | grep StatusNotifierItem</span><br><span class="line">org.kde.StatusNotifierItem-5431-2  5431  wechat  mae  ...</span><br><span class="line">org.kde.StatusNotifierItem-3210-2  3210  uuyc    mae  ...   <span class="comment"># 另一个应用</span></span><br></pre></td></tr></table></figure><p>名字里的 <code>5431</code> 就是微信主进程的 PID。看一眼它的接口：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ gdbus introspect --session \</span><br><span class="line">    --dest org.kde.StatusNotifierItem-5431-2 \</span><br><span class="line">    --object-path /StatusNotifierItem</span><br></pre></td></tr></table></figure><p>里面有几个值得注意的东西：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">method Activate(in i x, in i y)</span><br><span class="line">method SecondaryActivate(in i x, in i y)</span><br><span class="line">method ProvideXdgActivationToken(in s token)</span><br><span class="line">property s Category = &#x27;ApplicationStatus&#x27;</span><br><span class="line">property b ItemIsMenu = false</span><br><span class="line">property o Menu = &#x27;/MenuBar&#x27;</span><br></pre></td></tr></table></figure><p>再看菜单（<code>com.canonical.dbusmenu</code> 的 <code>GetLayout</code>），一共就两项：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[2] &#x27;显示&#x27;</span><br><span class="line">[1] &#x27;退出微信&#x27;</span><br></pre></td></tr></table></figure><p>「显示」这一项的处理函数，就是微信内部那个「把隐藏的主窗口重新显示出来」的入口；左键单击托盘图标触发的 <code>Activate</code> 通向的也是同一个恢复动作。</p><p>所以现象完全对上了：<strong>托盘能恢复，Dock 不能，因为两者调的根本不是同一段代码</strong>。Dock 那边压根不知道「微信已经有窗口了」，它只会傻傻地重跑一遍启动命令。</p><p>而这两个入口都会被我写进下面的脚本里，谁生效都行。</p><h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>思路：给 Dock 图标换一个 <code>Exec</code>。微信已经在跑，就走托盘那条路；没在跑，才真正启动。</p><h3 id="1-包装脚本"><a href="#1-包装脚本" class="headerlink" title="1. 包装脚本"></a>1. 包装脚本</h3><p>保存到 <code>~/.local/bin/wechat-dock</code>：</p><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/usr/bin/env bash</span></span><br><span class="line"><span class="comment"># 微信 Dock 入口 / 窗口唤回工具</span></span><br><span class="line"><span class="comment">#   用法: wechat-dock [--show] [参数...]</span></span><br><span class="line"><span class="comment">#     --show  只把已运行的微信主窗口叫回前台（等价于点托盘图标），不启动新实例</span></span><br><span class="line"><span class="comment">#     无参数   Dock 图标用：微信在跑就唤回窗口，没跑就正常启动</span></span><br><span class="line"><span class="built_in">set</span> -u</span><br><span class="line"></span><br><span class="line">MAIN_PID=$(pgrep -x wechat -o 2&gt;/dev/null || <span class="literal">true</span>)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">find_sni</span></span>() &#123;</span><br><span class="line">  <span class="built_in">local</span> pid=<span class="string">&quot;<span class="variable">$1</span>&quot;</span> sni=<span class="string">&quot;&quot;</span></span><br><span class="line">  sni=$(gdbus call --session \</span><br><span class="line">          --dest org.kde.StatusNotifierWatcher \</span><br><span class="line">          --object-path /StatusNotifierWatcher \</span><br><span class="line">          --method org.freedesktop.DBus.Properties.Get \</span><br><span class="line">          org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems 2&gt;/dev/null \</span><br><span class="line">        | <span class="built_in">tr</span> <span class="string">&#x27;,&#x27;</span> <span class="string">&#x27;\n&#x27;</span> | grep -o <span class="string">&quot;org\.kde\.StatusNotifierItem-<span class="variable">$&#123;pid&#125;</span>-[0-9]*&quot;</span> | <span class="built_in">head</span> -1)</span><br><span class="line">  <span class="keyword">if</span> [ -z <span class="string">&quot;<span class="variable">$sni</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    sni=$(gdbus call --session --dest org.freedesktop.DBus \</span><br><span class="line">            --object-path /org/freedesktop/DBus \</span><br><span class="line">            --method org.freedesktop.DBus.ListNames 2&gt;/dev/null \</span><br><span class="line">          | <span class="built_in">tr</span> <span class="string">&#x27;,&#x27;</span> <span class="string">&#x27;\n&#x27;</span> | grep -o <span class="string">&quot;org\.kde\.StatusNotifierItem-<span class="variable">$&#123;pid&#125;</span>-[0-9]*&quot;</span> | <span class="built_in">head</span> -1)</span><br><span class="line">  <span class="keyword">fi</span></span><br><span class="line">  <span class="built_in">printf</span> <span class="string">&#x27;%s&#x27;</span> <span class="string">&quot;<span class="variable">$sni</span>&quot;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="title">show_window</span></span>() &#123;</span><br><span class="line">  <span class="built_in">local</span> sni=<span class="string">&quot;<span class="variable">$1</span>&quot;</span></span><br><span class="line">  <span class="comment"># Wayland: 先递一个 xdg activation token，才能把窗口提到前台</span></span><br><span class="line">  gdbus call --session --dest <span class="string">&quot;<span class="variable">$sni</span>&quot;</span> --object-path /StatusNotifierItem \</span><br><span class="line">    --method org.kde.StatusNotifierItem.ProvideXdgActivationToken \</span><br><span class="line">    <span class="string">&quot;wechat_dock_<span class="subst">$(date +%s%N)</span>&quot;</span> &gt;/dev/null 2&gt;&amp;1</span><br><span class="line">  gdbus call --session --dest <span class="string">&quot;<span class="variable">$sni</span>&quot;</span> --object-path /StatusNotifierItem \</span><br><span class="line">    --method org.kde.StatusNotifierItem.Activate 0 0 &gt;/dev/null 2&gt;&amp;1</span><br><span class="line"></span><br><span class="line">  <span class="comment"># 再点一次托盘菜单里的“显示”，和手动点托盘完全同一条处理路径</span></span><br><span class="line">  python3 - <span class="string">&quot;<span class="variable">$sni</span>&quot;</span> &lt;&lt;<span class="string">&#x27;PY&#x27;</span> &gt;/dev/null 2&gt;&amp;1</span><br><span class="line">import sys, <span class="keyword">time</span>, dbus</span><br><span class="line">sni = sys.argv[1]</span><br><span class="line">try:</span><br><span class="line">    bus = dbus.SessionBus()</span><br><span class="line">    m = dbus.Interface(bus.get_object(sni, <span class="string">&#x27;/MenuBar&#x27;</span>), <span class="string">&#x27;com.canonical.dbusmenu&#x27;</span>)</span><br><span class="line">except Exception:</span><br><span class="line">    sys.exit(0)</span><br><span class="line"></span><br><span class="line">def find(items):</span><br><span class="line">    <span class="keyword">if</span> not isinstance(items, (list, tuple)):</span><br><span class="line">        <span class="built_in">return</span> None</span><br><span class="line">    <span class="keyword">if</span> len(items) == 3 and isinstance(items[0], dbus.Int32):</span><br><span class="line">        items = [items]</span><br><span class="line">    <span class="keyword">for</span> it <span class="keyword">in</span> items:</span><br><span class="line">        <span class="keyword">if</span> not (isinstance(it, (list, tuple)) and len(it) == 3):</span><br><span class="line">            <span class="built_in">continue</span></span><br><span class="line">        iid, props, children = it</span><br><span class="line">        <span class="keyword">if</span> str(props.get(<span class="string">&#x27;label&#x27;</span>, <span class="string">&#x27;&#x27;</span>)) <span class="keyword">in</span> (<span class="string">&#x27;显示&#x27;</span>, <span class="string">&#x27;Show&#x27;</span>):</span><br><span class="line">            <span class="built_in">return</span> int(iid)</span><br><span class="line">        hit = find(children)</span><br><span class="line">        <span class="keyword">if</span> hit is not None:</span><br><span class="line">            <span class="built_in">return</span> hit</span><br><span class="line">    <span class="built_in">return</span> None</span><br><span class="line"></span><br><span class="line">try:</span><br><span class="line">    layout = m.GetLayout(dbus.UInt32(0), dbus.Int32(-1), dbus.Array([], signature=<span class="string">&#x27;s&#x27;</span>))</span><br><span class="line">    iid = find(layout[1])</span><br><span class="line">    <span class="keyword">if</span> iid is not None:</span><br><span class="line">        m.Event(dbus.Int32(iid), <span class="string">&#x27;clicked&#x27;</span>, dbus.String(<span class="string">&#x27;&#x27;</span>, variant_level=1),</span><br><span class="line">                dbus.UInt32(int(time.time())))</span><br><span class="line">except Exception:</span><br><span class="line">    pass</span><br><span class="line">PY</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ <span class="string">&quot;<span class="variable">$&#123;1:-&#125;</span>&quot;</span> = <span class="string">&quot;--show&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">  <span class="keyword">if</span> [ -z <span class="string">&quot;<span class="variable">$&#123;MAIN_PID&#125;</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    <span class="built_in">exit</span> 1</span><br><span class="line">  <span class="keyword">fi</span></span><br><span class="line">  SNI=$(find_sni <span class="string">&quot;<span class="variable">$&#123;MAIN_PID&#125;</span>&quot;</span>)</span><br><span class="line">  [ -z <span class="string">&quot;<span class="variable">$&#123;SNI&#125;</span>&quot;</span> ] &amp;&amp; <span class="built_in">exit</span> 1</span><br><span class="line">  show_window <span class="string">&quot;<span class="variable">$&#123;SNI&#125;</span>&quot;</span></span><br><span class="line">  <span class="built_in">exit</span> 0</span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> [ -n <span class="string">&quot;<span class="variable">$&#123;MAIN_PID&#125;</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">  SNI=$(find_sni <span class="string">&quot;<span class="variable">$&#123;MAIN_PID&#125;</span>&quot;</span>)</span><br><span class="line">  <span class="keyword">if</span> [ -n <span class="string">&quot;<span class="variable">$&#123;SNI&#125;</span>&quot;</span> ]; <span class="keyword">then</span></span><br><span class="line">    show_window <span class="string">&quot;<span class="variable">$&#123;SNI&#125;</span>&quot;</span></span><br><span class="line">    <span class="built_in">exit</span> 0</span><br><span class="line">  <span class="keyword">fi</span></span><br><span class="line"><span class="keyword">fi</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">exec</span> /usr/bin/wechat <span class="string">&quot;<span class="variable">$@</span>&quot;</span></span><br></pre></td></tr></table></figure><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">chmod</span> +x ~/.local/bin/wechat-dock</span><br></pre></td></tr></table></figure><p>几个设计取舍说明一下：</p><ul><li><strong><code>pgrep -x wechat -o</code></strong> 只取最早的那个 PID，也就是主进程，避免匹配到 crashpad、<code>wxplayer</code>、<code>WeChatAppEx</code> 这些子进程；</li><li><strong>托盘项名字靠 PID 拼</strong>，这是 KStatusNotifierItem 的命名约定（<code>org.kde.StatusNotifierItem-&lt;pid&gt;-&lt;n&gt;</code>），比猜名字靠谱；</li><li><strong>两层兜底</strong>：先查托盘管理器，管理器不在就扫总线。托盘管理器由 GNOME 的 <code>ubuntu-appindicators</code> 扩展提供，那个扩展在会话中途被禁用&#x2F;重载过的话，<code>org.kde.StatusNotifierWatcher</code> 这个名字会暂时消失；</li><li><strong><code>ProvideXdgActivationToken</code> 在前，<code>Activate</code> 在后</strong>，顺序和 GNOME 那个扩展里的实现一致。纯 Wayland 下没有激活令牌，程序没法把窗口抢到前台；</li><li><strong>最后再点一次菜单的「显示」</strong>，这相当于绕过所有猜测，直接调用那个确定存在的处理函数。菜单项 id 每个版本可能变，所以按 label 找而不是写死 <code>2</code>。</li></ul><h3 id="2-覆盖-desktop-文件"><a href="#2-覆盖-desktop-文件" class="headerlink" title="2. 覆盖 desktop 文件"></a>2. 覆盖 desktop 文件</h3><p>不用改系统里那份（升级会覆盖），放到用户目录即可：</p><figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[Desktop Entry]</span></span><br><span class="line"><span class="attr">Name</span>=wechat</span><br><span class="line">Name<span class="section">[zh_CN]</span>=微信</span><br><span class="line"><span class="attr">Exec</span>=/home/mae/.local/bin/wechat-dock %U</span><br><span class="line"><span class="attr">StartupNotify</span>=<span class="literal">true</span></span><br><span class="line"><span class="attr">StartupWMClass</span>=wechat</span><br><span class="line"><span class="attr">Terminal</span>=<span class="literal">false</span></span><br><span class="line"><span class="attr">Icon</span>=/usr/share/icons/hicolor/<span class="number">512</span>x512/apps/wechat.png</span><br><span class="line"><span class="attr">Type</span>=Application</span><br><span class="line"><span class="attr">Categories</span>=Utility<span class="comment">;</span></span><br><span class="line"><span class="attr">Comment</span>=Wechat Desktop</span><br><span class="line">Comment<span class="section">[zh_CN]</span>=微信桌面版</span><br></pre></td></tr></table></figure><p>存到 <code>~/.local/share/applications/wechat.desktop</code>，然后刷新一下：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">update-desktop-database ~/.local/share/applications</span><br></pre></td></tr></table></figure><p>注意几个细节：</p><ul><li><strong><code>StartupWMClass=wechat</code></strong> 必须留着，否则 GNOME 认不出这个窗口属于哪个应用，Dock 上会多出一个图标；</li><li><strong><code>Icon</code> 写绝对路径</strong>，指向系统原来那个图标文件，这样不用自己准备一份；</li><li><code>Exec</code> 后面那个 <code>%U</code> 也保留，微信支持从文件管理器打开文件时传参。</li></ul><p>改完要<strong>注销重新登录</strong>（Wayland 下没法只重启 Shell），GNOME 才会重新读取 desktop 文件、重建 Dock 图标。</p><h3 id="3-可选：绑个全局快捷键"><a href="#3-可选：绑个全局快捷键" class="headerlink" title="3. 可选：绑个全局快捷键"></a>3. 可选：绑个全局快捷键</h3><p><code>--show</code> 模式不启动新实例，只唤回窗口，很适合绑快捷键：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">~/.local/bin/wechat-dock --show</span><br></pre></td></tr></table></figure><p>在「设置 → 键盘 → 自定义快捷键」里加一条就行，比 <code>Super+W</code> 之类的顺手位。</p><h2 id="一点补充"><a href="#一点补充" class="headerlink" title="一点补充"></a>一点补充</h2><p><strong>微信里改不了吗？</strong> 改不了。我把 <code>wechat</code> 主程序（一个 173MB 的 ELF）和 <code>/opt/wechat</code> 下所有 so 都扫了一遍 UTF-8 和 UTF-16 字符串，设置相关的只有「开机自启动」，<strong>没有</strong>「关闭主窗口时最小化到托盘 &#x2F; 退出程序」这类选项——那是 Windows 版和 macOS 版才有的东西。Linux 版是硬编码：关窗口就隐藏，绝不退出。所以只能从外面兜。</p><p><strong>为什么不直接 kill 再启动？</strong> 能恢复，但微信会重新走登录、重新拉会话列表，几分钟的聊天记录同步，代价太大。而且如前所述，单纯再执行一次 <code>/usr/bin/wechat</code> 是无效的。</p><p><strong>KDE 能用吗？</strong> 可以。这套逻辑只依赖 StatusNotifierItem 和 dbusmenu，Plasma 原生就提供托盘管理器，脚本不用改。</p><p><strong>如果脚本不生效怎么排查？</strong> 按顺序看三个东西：</p><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. 微信在不在</span></span><br><span class="line">pgrep -x wechat -o</span><br><span class="line"></span><br><span class="line"><span class="comment"># 2. 托盘项注册了没有</span></span><br><span class="line">busctl --user list | grep StatusNotifierItem</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. 手动调一次，看有没有报错</span></span><br><span class="line">gdbus call --session --dest org.kde.StatusNotifierItem-&lt;pid&gt;-2 \</span><br><span class="line">  --object-path /StatusNotifierItem \</span><br><span class="line">  --method org.kde.StatusNotifierItem.Activate 0 0</span><br></pre></td></tr></table></figure><p>如果第 2 步什么都没输出，说明负责托盘的 <code>ubuntu-appindicators</code> 扩展没在工作，先 <code>gnome-extensions enable ubuntu-appindicators@ubuntu.com</code> 再说。</p><h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ul><li><a target="_blank" rel="noopener" href="https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/">KStatusNotifierItem &#x2F; StatusNotifierItem 规范</a></li><li><a target="_blank" rel="noopener" href="https://www.freedesktop.org/wiki/Specifications/dbusmenu/">dbusmenu 规范</a></li><li><a target="_blank" rel="noopener" href="https://github.com/ubuntu/gnome-shell-extension-appindicator">gnome-shell-extension-appindicator 源码</a>（<code>appIndicator.js</code> 里的 <code>open()</code> 方法就是 <code>ProvideXdgActivationToken</code> + <code>Activate</code> 的组合）</li><li><a target="_blank" rel="noopener" href="https://wayland.app/protocols/xdg-activation-v1">XDG Activation 协议</a></li></ul></div><div class="article-licensing box"><div class="licensing-title"><p>Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决</p><p><a href="https://www.imaegoo.com/2026/linux-wechat-dock-tray-restore/">https://www.imaegoo.com/2026/linux-wechat-dock-tray-restore/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><p>iMaeGoo</p></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2026-11-27</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2026-11-27</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icons" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="icon fab fa-creative-commons"></i></a><a class="" rel="noopener" target="_blank" title="CC BY 4.0" href="https://creativecommons.org/licenses/by/4.0/deed.zh">CC BY 4.0</a></p></div></div></div></div></div><div class="article-tags is-size-7 mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/tool/">tool</a><a class="link-muted mr-2" rel="tag" href="/tags/ubuntu/">ubuntu</a></div></article></div><div class="card"><div class="card-content"><h3 class="menu-label has-text-centered">喜欢这篇文章？打赏一下作者吧</h3><div class="buttons is-centered"><a class="button donate" data-type="alipay"><span class="icon is-small"><i class="fab fa-alipay"></i></span><span>支付宝</span><span class="qrcode"><img src="/images/alipay.jpg" alt="支付宝"></span></a><a class="button donate" data-type="wechat"><span class="icon is-small"><i class="fab fa-weixin"></i></span><span>微信</span><span class="qrcode"><img src="/images/wechat.png" alt="微信"></span></a></div></div></div><div class="card"><nav class="post-navigation mt-4 level is-mobile card-content"><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2026/h3c-megabook-ubuntu/"><span class="level-item">H3C MegaBook 安装 Ubuntu，和原厂 Windows、Android 组成三系统</span><i class="level-item fas fa-chevron-right" aria-hidden="true"></i></a></div></nav></div><div class="card" id="comments"><div class="card-content"><h3 class="title is-5">评论</h3><div class="content twikoo" id="twikoo"></div><script src="https://registry.npmmirror.com/twikoo/2.0.17/files/dist/twikoo.min.js"></script><script>twikoo.init({envId:"https://twikoo.imaegoo.com",lang:"zh-CN",onCommentLoaded:function(){for(var t=document.getElementsByClassName("tk-content"),e=0;e<t.length;e++){var n=t[e],r=n.getElementsByTagName("img");if(0<r.length){for(var i=0;i<r.length;i++){var l=r[i],a=document.createElement("a");a.setAttribute("class","tk-lg-link"),a.setAttribute("href",l.getAttribute("src")),a.setAttribute("data-src",l.getAttribute("src")),a.appendChild(l.cloneNode(!1)),l.parentNode.insertBefore(a,l.nextSibling),l.remove()}"function"==typeof $.fn.lightGallery&&$(n).lightGallery({selector:".tk-lg-link"})}handleThirdPartyLink&&handleThirdPartyLink(n)}}})</script></div></div></div><style>.column.column-left,.column.column-right{display:none}</style><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen order-1 is-sticky"><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="/images/avatar.jpg" alt="iMaeGoo"></figure><p class="title is-size-4 is-block" style="line-height:inherit">iMaeGoo</p><p class="is-size-6 is-block">虹墨空间站</p><p class="is-size-6 is-flex justify-content-center"><i class="fas fa-map-marker-alt mr-1"></i><span>Zhengzhou, China</span></p></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives/"><p class="title">262</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories/"><p class="title">12</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags/"><p class="title">49</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="https://github.com/imaegoo" target="_blank" rel="me noopener" id="widget-follow">GitHub</a></div><div class="level is-mobile is-multiline"><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="哔哩哔哩" href="https://space.bilibili.com/4750943" aria-label="哔哩哔哩"><i class="fas fa-video" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="QQ" href="https://jq.qq.com/?_wv=1027&amp;k=2l9ZGIoL" aria-label="QQ"><i class="fab fa-qq" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="Mail" href="mailto:hello@imaegoo.com" aria-label="Mail"><i class="fas fa-envelope" aria-hidden="true"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="me noopener" title="RSS" href="/atom.xml" aria-label="RSS"><i class="fas fa-rss" aria-hidden="true"></i></a></div></div></div><div class="card widget"><div class="card-content"><div class="media" style="overflow:hidden;align-items:center"><div class="media-left"><figure class="image is-96x96"><img src="/images/weixin/qrcode.jpg" alt="微信二维码"></figure></div><div class="media-content"><div id="weixin-search-logo"></div><div class="control has-icons-left" id="weixin-search-text"><input class="input" readonly="readonly" value="虹墨iMaeGoo" onfocus="this.select()"><span class="icon is-small is-left"><i class="fas fa-search"></i></span></div></div></div></div></div><div class="card widget" data-type="archives"><div class="card-content"><div class="menu"><h3 class="menu-label">归档</h3><ul class="menu-list"><li><a class="level is-mobile" href="/archives/2026/"><span class="level-start"><span class="level-item">2026</span></span><span class="level-end"><span class="level-item tag">17</span></span></a></li><li><a class="level is-mobile" href="/archives/2025/"><span class="level-start"><span class="level-item">2025</span></span><span class="level-end"><span class="level-item tag">13</span></span></a></li><li><a class="level is-mobile" href="/archives/2024/"><span class="level-start"><span class="level-item">2024</span></span><span class="level-end"><span class="level-item tag">24</span></span></a></li><li><a class="level is-mobile" href="/archives/2023/"><span class="level-start"><span class="level-item">2023</span></span><span class="level-end"><span class="level-item tag">13</span></span></a></li><li><a class="level is-mobile" href="/archives/2022/"><span class="level-start"><span class="level-item">2022</span></span><span class="level-end"><span class="level-item tag">9</span></span></a></li><li><a class="level is-mobile" href="/archives/2021/"><span class="level-start"><span class="level-item">2021</span></span><span class="level-end"><span class="level-item tag">16</span></span></a></li><li><a class="level is-mobile" href="/archives/2020/"><span class="level-start"><span class="level-item">2020</span></span><span class="level-end"><span class="level-item tag">33</span></span></a></li><li><a class="level is-mobile" href="/archives/2019/"><span class="level-start"><span class="level-item">2019</span></span><span class="level-end"><span class="level-item tag">35</span></span></a></li><li><a class="level is-mobile" href="/archives/2018/"><span class="level-start"><span class="level-item">2018</span></span><span class="level-end"><span class="level-item tag">6</span></span></a></li><li><a class="level is-mobile" href="/archives/2016/"><span class="level-start"><span class="level-item">2016</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li><li><a class="level is-mobile" href="/archives/2013/"><span class="level-start"><span class="level-item">2013</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li><li><a class="level is-mobile" href="/archives/2012/"><span class="level-start"><span class="level-item">2012</span></span><span class="level-end"><span class="level-item tag">6</span></span></a></li><li><a class="level is-mobile" href="/archives/2011/"><span class="level-start"><span class="level-item">2011</span></span><span class="level-end"><span class="level-item tag">29</span></span></a></li><li><a class="level is-mobile" href="/archives/2010/"><span class="level-start"><span class="level-item">2010</span></span><span class="level-end"><span class="level-item tag">35</span></span></a></li><li><a class="level is-mobile" href="/archives/2009/"><span class="level-start"><span class="level-item">2009</span></span><span class="level-end"><span class="level-item tag">16</span></span></a></li><li><a class="level is-mobile" href="/archives/2008/"><span class="level-start"><span class="level-item">2008</span></span><span class="level-end"><span class="level-item tag">6</span></span></a></li></ul></div></div></div><div class="column-right-shadow is-hidden-widescreen is-sticky"></div></div><div class="column column-right is-4-tablet is-4-desktop is-3-widescreen is-hidden-touch is-hidden-desktop-only order-3 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="level is-mobile" href="#先说结论"><span class="level-left"><span class="level-item">1</span><span class="level-item">先说结论</span></span></a></li><li><a class="level is-mobile" href="#环境"><span class="level-left"><span class="level-item">2</span><span class="level-item">环境</span></span></a></li><li><a class="level is-mobile" href="#排查过程"><span class="level-left"><span class="level-item">3</span><span class="level-item">排查过程</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#一、微信根本没退出"><span class="level-left"><span class="level-item">3.1</span><span class="level-item">一、微信根本没退出</span></span></a></li><li><a class="level is-mobile" href="#二、点-Dock-图标，其实是在重复启动微信"><span class="level-left"><span class="level-item">3.2</span><span class="level-item">二、点 Dock 图标，其实是在重复启动微信</span></span></a></li><li><a class="level is-mobile" href="#三、托盘那条路为什么就行"><span class="level-left"><span class="level-item">3.3</span><span class="level-item">三、托盘那条路为什么就行</span></span></a></li></ul></li><li><a class="level is-mobile" href="#解决方案"><span class="level-left"><span class="level-item">4</span><span class="level-item">解决方案</span></span></a><ul class="menu-list"><li><a class="level is-mobile" href="#1-包装脚本"><span class="level-left"><span class="level-item">4.1</span><span class="level-item">1. 包装脚本</span></span></a></li><li><a class="level is-mobile" href="#2-覆盖-desktop-文件"><span class="level-left"><span class="level-item">4.2</span><span class="level-item">2. 覆盖 desktop 文件</span></span></a></li><li><a class="level is-mobile" href="#3-可选：绑个全局快捷键"><span class="level-left"><span class="level-item">4.3</span><span class="level-item">3. 可选：绑个全局快捷键</span></span></a></li></ul></li><li><a class="level is-mobile" href="#一点补充"><span class="level-left"><span class="level-item">5</span><span class="level-item">一点补充</span></span></a></li><li><a class="level is-mobile" href="#参考"><span class="level-left"><span class="level-item">6</span><span class="level-item">参考</span></span></a></li></ul></div></div><style>#toc .menu-list>li>a.is-active+.menu-list{display:block}#toc .menu-list>li>a+.menu-list{display:none}</style><script src="/js/toc.js" defer="defer"></script></div><div class="card widget" data-type="recent-posts"><div class="card-content"><h3 class="menu-label">最新文章</h3><article class="media"><div class="media-content"><p class="date"><time datetime="2026-11-27T06:20:00.000Z">2026-11-27</time></p><p class="title"><a href="/2026/linux-wechat-dock-tray-restore/">Linux 版微信关掉窗口后点 Dock 图标没反应？摸清它的托盘激活逻辑，写个包装脚本彻底解决</a></p><p class="categories"><a href="/categories/tech/">Tech</a> / <a href="/categories/tech/linux/">Linux</a></p></div></article><article class="media"><div class="media-content"><p class="date"><time datetime="2026-11-26T10:00:00.000Z">2026-11-26</time></p><p class="title"><a href="/2026/h3c-megabook-ubuntu/">H3C MegaBook 安装 Ubuntu，和原厂 Windows、Android 组成三系统</a></p><p class="categories"><a href="/categories/tech/">Tech</a> / <a href="/categories/tech/linux/">Linux</a></p></div></article><article class="media"><div class="media-content"><p class="date"><time datetime="2026-10-24T10:00:00.000Z">2026-10-24</time></p><p class="title"><a href="/2026/remote-manage-deepseek-harness/">在一个网站下远程管理多台设备上的 DeepSeek Harness</a></p><p class="categories"><a href="/categories/tech/">Tech</a></p></div></article><article class="media"><div class="media-content"><p class="date"><time datetime="2026-10-21T00:30:00.000Z">2026-10-21</time></p><p class="title"><a href="/2026/oppo-watch-x3-mini-watchface-patch/">OPPO Watch X3 Mini 表盘魔改过程记录</a></p><p class="categories"><a href="/categories/tech/">Tech</a> / <a href="/categories/tech/android/">Android</a></p></div></article><article class="media"><div class="media-content"><p class="date"><time datetime="2026-10-13T04:00:00.000Z">2026-10-13</time></p><p class="title"><a href="/2026/hexo-to-wechat-mp/">Hexo 文章一键发布到微信公众号</a></p><p class="categories"><a href="/categories/tech/">Tech</a> / <a href="/categories/tech/frontend/">FrontEnd</a></p></div></article></div></div><div class="card widget" id="twikoo-new"><div class="card-content"><div class="menu"><h3 class="menu-label">最新评论</h3><script>window.twikooEnvId="https://twikoo.imaegoo.com"</script><div class="twikoo-new-container"></div></div></div></div></div><style>.column.column-left,.column.column-right{display:block}</style></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img class="logo-img" src="/images/logo.png" alt="虹墨空间站" height="28"><img class="logo-img-dark" src="/images/logo-dark.png" alt="虹墨空间站" height="28"></a><p class="is-size-7"><span>&copy; 2026 iMaeGoo</span>  Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &amp; <a href="https://github.com/imaegoo/hexo-theme-icarus" target="_blank" rel="noopener">Icarus</a><br><span id="busuanzi_container_site_uv">总访问量&nbsp;<span id="busuanzi_value_site_pv">-</span>&nbsp;次&nbsp;&nbsp;总访客数&nbsp;<span id="busuanzi_value_site_uv">-</span>&nbsp;人</span></p><p class="is-size-7"><a href="https://beian.mps.gov.cn/#/query/webSearch?code=41010502005985" rel="noreferrer" target="_blank">豫公网安备41010502005985</a>&nbsp;&nbsp;<a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer noopener">豫ICP备18017229号</a></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/" aria-label="Creative Commons"><i class="fab fa-creative-commons" aria-hidden="true"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/deed.zh" aria-label="Attribution 4.0 International"><i class="fab fa-creative-commons-by" aria-hidden="true"></i></a></p></div></div></div></div></footer><script src="/js/imaegoo/jquery/3.7.1/dist/jquery.min.js"></script><script src="https://registry.npmmirror.com/twikoo/2.0.17/files/dist/twikoo.min.js"></script><script src="/js/imaegoo/clipboard/2.0.11/dist/clipboard.min.js" defer="defer"></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);</script><script data-pjax>var IcarusThemeSettings={gallery:!0,article:{highlight:{clipboard:!0,fold:"unfolded",fold_preview:0}},i18n:{copy:"复制",copied:"已复制！"}};"loading"!==document.readyState&&window.HexoGallery.init(document,{lightGallery:IcarusThemeSettings.gallery,justifiedGallery:IcarusThemeSettings.gallery})</script><script data-pjax src="/js/column.js"></script><script src="/js/navbar.js" defer="defer"></script><script src="/js/github-calendar.js" defer="defer"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script data-pjax src="/js/back_to_top.js" defer="defer"></script><script src="/js/imaegoo/lightgallery/3.0.0/lightgallery.min.js" defer="defer"></script><script src="/js/imaegoo/lightgallery/3.0.0/plugins/zoom/lg-zoom.min.js" defer="defer"></script><script src="/js/imaegoo/lightgallery/3.0.0/plugins/thumbnail/lg-thumbnail.min.js" defer="defer"></script><script src="/js/imaegoo/lightgallery/3.0.0/plugins/fullscreen/lg-fullscreen.min.js" defer="defer"></script><script>(function installGallery(window) {
+  if (window.HexoGallery) return;
+  const document = window.document;
+  const requests = new Map();
+  const layouts = new Map();
+  const lightboxes = new Map();
+  function destroyLightbox(container) {
+    const state = lightboxes.get(container);
+    if (!state) return;
+    container.removeEventListener('click', state.click);
+    // The SDK removes its container through parentNode, even after a host replaced the body.
+    const dialog = state.instance.$container && state.instance.$container.get();
+    if (dialog && !dialog.parentNode) {
+      dialog.style.display = 'none';
+      document.body.appendChild(dialog);
+    }
+    if (state.instance.lgOpened) {
+      state.instance.settings.startAnimationDuration = 0;
+      state.instance.settings.backdropDuration = 0;
+    }
+    state.instance.destroy();
+    lightboxes.delete(container);
+  }
+  function lightbox(container, enabled) {
+    if (!enabled) {
+      destroyLightbox(container);
+      return;
+    }
+    if (typeof window.lightGallery !== 'function') return;
+    const plugins = (window.HexoGallery.lightGalleryPlugins || []).map(name => window[name]);
+    if (plugins.some(plugin => typeof plugin !== 'function')) return;
+    const items = Array.from(container.querySelectorAll('a.gallery-item[href]'));
+    if (!items.length) {
+      destroyLightbox(container);
+      return;
+    }
+    const elements = items.map(link => {
+      const image = link.querySelector('img');
+      const caption = document.createElement('span');
+      caption.textContent = image ? image.alt : '';
+      return {
+        src: link.href,
+        thumb: image ? image.currentSrc || image.src : link.href,
+        subHtml: caption.innerHTML,
+        alt: caption.innerHTML.replace(/"/g, '&quot;')
+      };
+    });
+    const signature = JSON.stringify(elements);
+    let state = lightboxes.get(container);
+    if (state) {
+      if (!sameItems(state.items, items) || state.signature !== signature) {
+        if (state.instance.lgOpened) {
+          state.instance.updateSlides(elements, Math.min(state.instance.index, elements.length - 1));
+        } else {
+          state.instance.refresh(elements);
+        }
+        state.items = items;
+        state.signature = signature;
+      }
+      return;
+    }
+    const instance = window.lightGallery(container, {
+      dynamic: true,
+      dynamicEl: elements,
+      plugins
+    });
+    state = {
+      instance,
+      items,
+      signature,
+      click: null
+    };
+    state.click = event => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest('a.gallery-item');
+      const index = state.items.indexOf(link);
+      if (index < 0) return;
+      event.preventDefault();
+      instance.openGallery(index, link);
+    };
+    container.addEventListener('click', state.click);
+    lightboxes.set(container, state);
+  }
+  function sameItems(items, current) {
+    return items.length === current.length && Array.from(items).every((item, i) => item === current[i]);
+  }
+  function enhance(container) {
+    container.querySelectorAll('img:not(.not-gallery-item)').forEach(image => {
+      // Third-party SDK icons are controls, not article images. Script-load retries also
+      // scan icons inserted after the article's initial enhancement.
+      if (image.closest('a, .sharethis-inline-share-buttons, .a2a_kit, [data-share-provider]')) return;
+      const link = document.createElement('a');
+      link.className = 'gallery-item';
+      const src = image.getAttribute('src');
+      if (src !== null) link.setAttribute('href', src);
+      image.parentNode.insertBefore(link, image);
+      link.appendChild(image);
+      if (image.alt) {
+        const caption = document.createElement('p');
+        caption.className = 'has-text-centered is-size-6 caption';
+        caption.textContent = image.alt;
+        link.appendChild(caption);
+      }
+    });
+  }
+  function apply(root, options) {
+    const containers = root === document ? root.querySelectorAll('.article') : [root];
+    containers.forEach(enhance);
+    // Do not capture an incomplete article while HTML is still being parsed.
+    if (document.readyState === 'loading') return;
+    containers.forEach(container => lightbox(container, options.lightGallery));
+    if (options.justifiedGallery && typeof window.JustifiedGallery === 'function') {
+      const galleries = Array.from(root.querySelectorAll('.justified-gallery'));
+      if (root !== document && root.matches('.justified-gallery')) galleries.unshift(root);
+      galleries.forEach(gallery => {
+        const paragraphs = new Set(Array.from(gallery.querySelectorAll(':scope > p > .gallery-item'), link => link.parentNode));
+        paragraphs.forEach(paragraph => {
+          paragraph.replaceWith(...paragraph.childNodes);
+        });
+        gallery.querySelectorAll(':scope > .gallery-item > .caption').forEach(caption => {
+          caption.classList.add('jg-caption');
+        });
+        let state = layouts.get(gallery);
+        const items = () => Array.from(gallery.children).filter(item => !item.classList.contains('jg-spinner') && (item.matches(state.instance.settings.selector) || item.matches('div')));
+        if (state) {
+          if (sameItems(state.items, items())) return;
+          // init refreshes entries but starts another width watcher; stop and rewind first.
+          state.instance.widthWatcher.stop();
+          state.instance.stopImgAnalyzerStarter();
+          state.instance.rewind();
+        } else {
+          // The SDK reuses .jg-caption and safely creates captions for pre-existing links.
+          state = {
+            instance: new window.JustifiedGallery(gallery)
+          };
+          layouts.set(gallery, state);
+        }
+        state.instance.init();
+        state.items = items();
+      });
+    }
+  }
+  function prune() {
+    layouts.forEach((state, gallery) => {
+      if (!gallery.isConnected) destroyLayout(gallery);
+    });
+    lightboxes.forEach((state, container) => {
+      if (!container.isConnected) destroyLightbox(container);
+    });
+    requests.forEach((options, root) => {
+      if (root !== document && !root.isConnected) requests.delete(root);
+    });
+  }
+  function destroyLayout(gallery) {
+    const {
+      instance
+    } = layouts.get(gallery);
+    // The SDK's destroy does not stop an active loading spinner.
+    instance.stopLoadingSpinnerAnimation();
+    instance.destroy();
+    layouts.delete(gallery);
+  }
+  function retry() {
+    prune();
+    requests.forEach((options, root) => apply(root, options));
+  }
+  window.HexoGallery = {
+    /**
+     * Enhance images in a content container, optionally initializing the two Gallery SDKs.
+     * Repeated calls reuse existing wrappers, captions and plugin instances. Missing SDKs can be
+     * retried by calling init again; DOM ready, window load and subsequent script loads also retry
+     * connected containers with their latest options. SDK initialization waits for DOM readiness.
+     * Changed item collections refresh their existing SDK instance. Disabling the lightbox destroys
+     * it; the independently managed layout plugin is unchanged.
+     * @param {Document|Element} [root=document] Content container; document targets .article images
+     *     and lightboxes, and all .justified-gallery elements.
+     * @param {Object} [options={}] SDK opt-ins; omitted flags disable plugin initialization.
+     * @param {boolean} [options.lightGallery=false] Initialize lightGallery when available.
+     * @param {boolean} [options.justifiedGallery=false] Initialize justifiedGallery when available.
+     */
+    init: function (root, options) {
+      root = root || document;
+      options = options || {};
+      const enabled = {
+        lightGallery: options.lightGallery === true,
+        justifiedGallery: options.justifiedGallery === true
+      };
+      prune();
+      requests.set(root, enabled);
+      apply(root, enabled);
+    },
+    /** Destroy lightboxes, layouts and pending retries before content is replaced (e.g. PJAX). */
+    destroy: function (root) {
+      root = root || document;
+      lightboxes.forEach((state, container) => {
+        if (root === document || root === container || root.contains(container)) destroyLightbox(container);
+      });
+      layouts.forEach((state, gallery) => {
+        if (root === document || root === gallery || root.contains(gallery)) destroyLayout(gallery);
+      });
+      requests.forEach((options, target) => {
+        if (root === document || root === target || root.contains(target)) requests.delete(target);
+      });
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', retry, {
+      once: true
+    });
+  }
+  if (document.readyState !== 'complete') window.addEventListener('load', retry, {
+    once: true
+  });
+  document.addEventListener('hexo:gallery:ready', retry);
+  // Deferred scripts may arrive after init, including on the first enabled page reached by PJAX.
+  // Retry the latest requests, rather than capturing a previous page's enabled configuration.
+  document.addEventListener('load', event => {
+    if (event.target.tagName === 'SCRIPT') retry();
+  }, true);
+})(window);
+window.HexoGallery.lightGalleryPlugins = ["lgZoom","lgThumbnail","lgFullscreen"];
+window.HexoGallery.init(document, {
+        lightGallery: true,
+        justifiedGallery: true
+    });</script><script type="module">import { JustifiedGallery } from "/js/imaegoo/justified-gallery/4.0.2/dist/justified-gallery.js";
+window.JustifiedGallery = JustifiedGallery;
+document.dispatchEvent(new Event('hexo:gallery:ready'));</script><script>!function(){var s=["/js/imaegoo/cookieconsent/3.1.1/build/cookieconsent.min.js"],d={};!function e(t){if(t>=s.length)window.hexoComponentCookieConsentPopup||(window.hexoComponentCookieConsentPopup=!0,window.cookieconsent.initialise({type:"info",theme:"edgeless",static:!1,position:"bottom-right",content:{message:"此网站使用 Cookie，以启用评论系统和分析功能。",dismiss:"知道了",allow:"允许使用Cookie",deny:"拒绝",link:"了解更多",policy:"Cookie政策",href:"/cookies/"},palette:{popup:{background:"#edeff5",text:"#838391"},button:{background:"#4b81e8"}}},function(e){window.hexoComponentCookieConsentPopup=e}));else{for(var o=null,n=0;n<document.scripts.length;n++)if(document.scripts[n].getAttribute("src")===s[t]){o=document.scripts[n];break}if(o&&"false"!==o.getAttribute("data-loaded"))e(t+1);else{if(!o){for(var i in(o=document.createElement("script")).src=s[t],o.async=!0,o.setAttribute("data-loaded","false"),d)o.setAttribute(i,d[i]);o.addEventListener("load",function(){this.setAttribute("data-loaded","true")}),o.addEventListener("error",function(){this.remove()}),document.head.appendChild(o)}o.addEventListener("load",function(){e(t+1)})}}}(0)}()</script><script data-pjax src="/js/main.js" defer="defer"></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><div class="searchbox-pinyin"><label class="checkbox"><input id="search-by-pinyin" type="checkbox" checked="checked"><span> 拼音检索</span></label></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/imaegoo/pinyin.js" defer="defer"></script><script src="/js/insight.js" defer="defer"></script><script>document.addEventListener("DOMContentLoaded",function(){loadInsight({contentUrl:"/content.json"},{hint:"想要查找什么...",untitled:"(无标题)",posts:"文章",pages:"页面",categories:"分类",tags:"标签"})})</script><script type="text/javascript" src="/js/imaegoo/imaegoo.js"></script><script type="text/javascript" src="/js/imaegoo/universe.js"></script></body></html>
